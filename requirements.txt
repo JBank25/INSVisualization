@@ -1,5 +1,6 @@
 asyncio
 bleak
-logging
-sys
-struct
+pygame
+PyOpenGL 
+PyOpenGL_accelerate
+numpy
