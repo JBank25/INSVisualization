@@ -4,19 +4,21 @@ from bleak import discover
 from bleak import BleakScanner
 import sys
 import struct
+import multiprocessing as mp
 
 BLE_UUID_IMU_VALUE = "C8F88594-2217-0CA6-8F06-A4270B675D69" 
 BLE_UUID_GPS_VALUE = "C8F88594-2217-0CA6-8F05-A4270B675D69"
 num_notifications = 0   #number of notifications received, debug purposes
 imu_data_queue = asyncio.Queue(-1)    #queue for storing imu data
 
-async def process_imu_data():
+async def process_imu_data(display_queue):
     """
     This coroutine processes the IMU data from the queue.
     Probably where we should be doing some visulization. stuff
     """
     while True:
         imu_data = await imu_data_queue.get()
+        display_queue.put(imu_data)
         print(f"Processing IMU data: {imu_data}")
 
 
@@ -68,6 +70,7 @@ async def main():
     Once connection is established, it will start listening for notifications.
     Currently it will listen for notifications from the IMU and GPS.
     """
+    display_queue = multiprocesessing.Queue()
     devices = await BleakScanner.discover()
     for d in devices:                       #find the Arduino Nano 33 BLE
         if d.name == "Arduino Nano 33 BLE": #name should be the name of your device
@@ -75,7 +78,7 @@ async def main():
             async with BleakClient(d.address) as client:    #connect to the device
                 await client.start_notify(BLE_UUID_IMU_VALUE, imu_handler)  #start listening for notifications from IMU
                 await client.start_notify(BLE_UUID_GPS_VALUE, gps_handler)  #start listening for notifications from GPS
-                processing_task = asyncio.create_task(process_imu_data())   # start the coroutine to process the IMU data
+                processing_task = asyncio.create_task(process_imu_data(display_queue))   # start the coroutine to process the IMU data
                 loop = asyncio.get_event_loop()                     
                 try:
                     print("Press 'q' to exit")
