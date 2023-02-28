@@ -4,11 +4,19 @@ from bleak import discover
 from bleak import BleakScanner
 import sys
 import struct
+import socket
+import json
 
 BLE_UUID_IMU_VALUE = "C8F88594-2217-0CA6-8F06-A4270B675D69" 
 BLE_UUID_GPS_VALUE = "C8F88594-2217-0CA6-8F05-A4270B675D69"
 num_notifications = 0   #number of notifications received, debug purposes
 imu_data_queue = asyncio.Queue(-1)    #queue for storing imu data
+
+# create a TCP/IP socket
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+server_address = ('localhost', 10003)
+sock.connect(server_address)
+
 
 async def process_imu_data():
     """
@@ -17,8 +25,18 @@ async def process_imu_data():
     """
     while True:
         imu_data = await imu_data_queue.get()
-        print(f"Processing IMU data: {imu_data}")
-
+        #only send the last 3 entries in the list
+        imu_data = json.dumps(imu_data[-3:])
+        print(f"Sending IMU data: {imu_data}")
+        sock.sendall(imu_data.encode())
+        # loop until we receive a '1' back from the socket
+        while True:
+            response = sock.recv(1024)
+            if response == b'1':
+                print("Received '1' from socket")
+                break
+            else:
+                print(f"Received unexpected response from socket: {response}")
 
 async def check_imu_data_queue():
     """
