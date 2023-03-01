@@ -4,7 +4,45 @@ from OpenGL.GL import *
 from OpenGL.GLU import *
 import numpy as np
 import time
-import multiprocessing as mp
+
+import socket
+import json
+import threading
+import queue
+
+HOST = 'localhost'
+PORT = 10003
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.bind((HOST, PORT))
+sock.listen()
+
+
+imu_data_queue = queue.Queue()
+
+def receive_data():
+    while True:
+        # wait for a client to connect
+        conn, addr = sock.accept()
+        with conn:
+            while True:
+                data = conn.recv(52)
+                if not data:
+                    break
+                json_received = data.decode('utf-8')
+                json_list = json.loads(json_received)
+                print("Received: ", json_list)
+                imu_data_queue.put(json_list)
+                conn.sendall(b'1')
+
+
+# start a separate thread to handle incoming data
+recv_thread = threading.Thread(target=receive_data)
+recv_thread.start()
+
+# define the host and port to receive data on
+
+# create a socket and start listening for incoming connections
+
 
 pygame.init()
 display = (800, 600)
@@ -142,9 +180,11 @@ edgeArrow = (
 
 # Set up the initial positions and rotations
 starting_rot = [[20,103,-4],[20,103,-4],[20,103,-4],[20,103,-4]]
+offset = starting_rot[0]
 len_drone_rots = 10000
 drone_pos = [0, 0, 0]
 drone_rotation = starting_rot[0]# * len_drone_rots#[20,103,-4]
+drone_rotation_last = [0,0,0]
 ax_pos = [0, 0, 0]
 ax_rotation = starting_rot[1]
 arrow_pos = [0,0,0]
@@ -211,77 +251,68 @@ def drawText(x, y, text):
     glDrawPixels(textSurface.get_width(), textSurface.get_height(), GL_RGBA, GL_UNSIGNED_BYTE, textData)
 
     
-def getQueue(q):
-    if not q.empty():
-        return q.get()
-    else:
-        return [0]*13
 
 # Set up the game loop
-x = list(np.random.uniform(-.5,.5,[1000,]))
-y = list(np.random.uniform(-.5,.5,[1000,]))
-z = list(np.random.uniform(-.5,.5,[1000,]))
 rot = [0.]*1000
 rot0 = [0.25]
 idx = -1
 font = pygame.font.Font(None, 30)
 glEnable(GL_DEPTH_TEST)
 cam = [0.,0.]
+lag = 0
+xyz = [0.]*13
+zeros = [0.]*13
 
-
-display_queue = mp.Queue()
-mp.Process(target=display, args=(display_queue,)).start()
-
-def display():
-    while True:
-        start = time.time()
-        if not display_queue.empty():
-            xyz = display_queue.get()
-        else:
-            xyz = [0]*13
-        idx = (idx+1)%1000
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                quit()
-            elif event.type == pygame.MOUSEBUTTONDOWN:
-                mouse_down = True
-                mouse_start_pos = pygame.mouse.get_pos()
-            elif event.type == pygame.MOUSEBUTTONUP:
-                mouse_down = False
-            elif event.type == pygame.MOUSEMOTION and mouse_down:
-                mouse_pos = pygame.mouse.get_pos()
-                camera_rot_y += (mouse_pos[0] - mouse_start_pos[0]) / 5.0
-                cam[1] = camera_rot_y
-                camera_rot_x += (mouse_pos[1] - mouse_start_pos[1]) / 5.0
-                cam[0] = camera_rot_x
-                mouse_start_pos = mouse_pos
-        glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT)
-        glClearColor(0.18431372549, 0.501960784314, 0.0352941176471, 0) # Set the background color to blue
-        glMatrixMode(GL_MODELVIEW)
-        glLoadIdentity()
-        gluLookAt(0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0)
-        glTranslatef(camera_x, camera_y, -5.0)
-        drone_rotation[0] += xyz[10]#rotates like I would backflip
-        drone_rotation[1] += xyz[11]#rotates like I would spin
-        drone_rotation[2] += xyz[12]#rotates like I would cartwheel
-        #rot[idx] = 0
-        # Draw the objects
-        draw_axis(ax_pos, ax_rotation, cam)
-        draw_drone(drone_pos, drone_rotation, cam)
-        display_drone_rotation(drone_rotation)
-        # Update the display
-        pygame.display.flip()
-
-        # Set the framerate
-        now = int(1000*(time.time()-start))
-        if (now) < 20:
-            #print(now)
-            pygame.time.wait(20-(now))
-        else:
-            #print(now)
-            print('Im slow')
-        while True:
-            idx += 1
-    
-        
+while True:
+    start = time.time()
+    idx = (idx+1)%1000
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            pygame.quit()
+            quit()
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            mouse_down = True
+            mouse_start_pos = pygame.mouse.get_pos()
+        elif event.type == pygame.MOUSEBUTTONUP:
+            mouse_down = False
+        elif event.type == pygame.MOUSEMOTION and mouse_down:
+            mouse_pos = pygame.mouse.get_pos()
+            camera_rot_y += (mouse_pos[0] - mouse_start_pos[0]) / 5.0
+            cam[1] = camera_rot_y
+            camera_rot_x += (mouse_pos[1] - mouse_start_pos[1]) / 5.0
+            cam[0] = camera_rot_x
+            mouse_start_pos = mouse_pos
+    glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT)
+    glClearColor(0.18431372549, 0.501960784314, 0.0352941176471, 0) # Set the background color to blue
+    glMatrixMode(GL_MODELVIEW)
+    glLoadIdentity()
+    gluLookAt(0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0)
+    glTranslatef(camera_x, camera_y, -5.0)
+    #glRotatef(camera_rot_x, 1.0, 0.0, 0.0)
+    #glRotatef(camera_rot_y, 0.0, 1.0, 0.0)
+    # Rotate the drone
+    if imu_data_queue.qsize() > 0:
+        while imu_data_queue.qsize() > 0:
+            xyz = imu_data_queue.get()
+    else:
+        xyz = xyz     
+    drone_rotation[0] = xyz[10] + offset[0]#rotates like I would backflip
+    drone_rotation[1] = xyz[11] + offset[1]#rotates like I would spin
+    drone_rotation[2] = xyz[12] + offset[2]#rotates like I would cartwheel
+    #rot[idx] = 0
+    # Draw the objects
+    draw_axis(ax_pos, ax_rotation, cam)
+    draw_drone(drone_pos, drone_rotation, cam)
+    display_drone_rotation(drone_rotation)
+    # Update the display
+    pygame.display.flip()
+    # Set the framerate
+    now = int(1000*(time.time()-start))
+    if now+lag <= 30:
+        pygame.time.wait(30-now-lag)
+        lag = 0
+    else:
+        lag += now+lag-30
+        #print('too slow', lag)
+    if lag > 100:
+        lag = 0
