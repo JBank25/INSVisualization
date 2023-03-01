@@ -30,7 +30,7 @@ def receive_data():
                     break
                 json_received = data.decode('utf-8')
                 json_list = json.loads(json_received)
-                print("Received: ", json_list)
+                #print("Received: ", json_list)
                 imu_data_queue.put(json_list)
                 conn.sendall(b'1')
 
@@ -260,9 +260,9 @@ font = pygame.font.Font(None, 30)
 glEnable(GL_DEPTH_TEST)
 cam = [0.,0.]
 lag = 0
-xyz = [0.]*13
-zeros = [0.]*13
-last = [0.]*13
+xyz = [0]*3
+zeros = [0]*3
+last = [0]*3
 
 while True:
     start = time.time()
@@ -295,17 +295,19 @@ while True:
     if imu_data_queue.qsize() > 0:
         while imu_data_queue.qsize() > 0:
             xyz = imu_data_queue.get()
+        for i in range(3):
+            xyz[i] = int(xyz[i]) - int(offset[i])
     else:
-        xyz = xyz     
-    drone_rotation[0] = xyz[10] - last[10] + offset[0]#rotates like I would backflip
-    drone_rotation[1] = xyz[11] - last[11] + offset[1]#rotates like I would spin
-    drone_rotation[2] = xyz[12] - last[12] + offset[2]#rotates like I would cartwheel
+        xyz = xyz
+    drone_rotation[0] = xyz[0] #rotates like I would backflip
+    drone_rotation[1] = xyz[1] #rotates like I would spin
+    drone_rotation[2] = xyz[2]#rotates like I would cartwheel
     last = xyz.copy()
     #rot[idx] = 0
     # Draw the objects
     draw_axis(ax_pos, ax_rotation, cam)
     draw_drone(drone_pos, drone_rotation, cam)
-    display_drone_rotation(drone_rotation)
+    display_drone_rotation(xyz)
     # Update the display
     pygame.display.flip()
     # Set the framerate
