@@ -262,6 +262,7 @@ cam = [0.,0.]
 lag = 0
 xyz = [0.]*13
 zeros = [0.]*13
+last = [0.]*13
 
 while True:
     start = time.time()
@@ -296,9 +297,10 @@ while True:
             xyz = imu_data_queue.get()
     else:
         xyz = xyz     
-    drone_rotation[0] = xyz[10] + offset[0]#rotates like I would backflip
-    drone_rotation[1] = xyz[11] + offset[1]#rotates like I would spin
-    drone_rotation[2] = xyz[12] + offset[2]#rotates like I would cartwheel
+    drone_rotation[0] = xyz[10] - last[10] + offset[0]#rotates like I would backflip
+    drone_rotation[1] = xyz[11] - last[11] + offset[1]#rotates like I would spin
+    drone_rotation[2] = xyz[12] - last[12] + offset[2]#rotates like I would cartwheel
+    last = xyz.copy()
     #rot[idx] = 0
     # Draw the objects
     draw_axis(ax_pos, ax_rotation, cam)
