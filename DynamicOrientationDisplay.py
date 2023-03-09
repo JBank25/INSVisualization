@@ -26,7 +26,8 @@ def receive_data():
         conn, addr = sock.accept()
         with conn:
             while True:
-                data = conn.recv(52)
+                data = conn.recv(64)
+                #print(type(data))
                 if not data:
                     break
                 json_received = data.decode('utf-8')
@@ -246,7 +247,7 @@ def display_drone_rotation(rotation):
     rotation_text = ['','','']
     #rotation_num = [0.,0.,0.]
     rotation_text[2] = "x:  {:.3f}°".format((rotation[0]-offset[0])%360.)
-    rotation_text[1] = "y:  {:.3f}°".format((rotation[1]-offset[1])%360.)
+    rotation_text[1] = "y:  {:.3f}°".format((rotation[1]-offset[1]-180)%360.)
     rotation_text[0] = "z:  {:.3f}°".format((rotation[2]-offset[2])%360.)
     for i in range(3):
         drawText(10,(i+1)*30,rotation_text[i])
@@ -270,6 +271,7 @@ lag = 0
 xyz = [0]*3
 zeros = [0]*3
 last = [0]*3
+flag = 0
 
 ##generate test xyz rotation data
 ##x = ([0] * 500) + [(i/10) for i in list(range(1, 1801))] + ([0] * 1300)
@@ -319,22 +321,24 @@ while True:
     #glRotatef(camera_rot_x, 1.0, 0.0, 0.0)
     #glRotatef(camera_rot_y, 0.0, 1.0, 0.0)
     # Rotate the drone
-    flag = 0
     if imu_data_queue.qsize() > 0:
         while imu_data_queue.qsize() > 0:
             xyz = imu_data_queue.get()
-            flag = 1
+            flag = 180
     else:
         xyz = xyz
-    drone_rotation[0] = xyz[0]+offset[0] #rotates like I would backflip
-    drone_rotation[1] = xyz[1]+offset[1] #rotates like I would spin
-    drone_rotation[2] = xyz[2]+offset[2]#rotates like I would cartwheel
+    drone_rotation[0] = xyz[1]+offset[0] #rotates like I would backflip
+    drone_rotation[1] = xyz[2]+offset[1] #rotates like I would spin
+    drone_rotation[2] = xyz[0]+offset[2]#rotates like I would cartwheel
     last = xyz.copy()
     #rot[idx] = 0
     # Draw the objects
     draw_axis(ax_pos, ax_rotation, cam)
     draw_drone(drone_pos, drone_rotation, cam)
-    display_drone_rotation(drone_rotation)
+    if flag == 0:
+        display_drone_rotation([offset[0],offset[1]-180,offset[2]])
+    else:
+        display_drone_rotation(drone_rotation)
     # Update the display
     pygame.display.flip()
     # Set the framerate
