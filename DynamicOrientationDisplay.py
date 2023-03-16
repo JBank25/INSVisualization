@@ -26,15 +26,18 @@ def receive_data():
         conn, addr = sock.accept()
         with conn:
             while True:
-                data = conn.recv(64)
-                #print(type(data))
-                if not data:
-                    break
-                json_received = data.decode('utf-8')
-                json_list = json.loads(json_received)
-                #print("Received: ", json_list)
-                imu_data_queue.put(json_list)
-                conn.sendall(b'1')
+                try:
+                    data = conn.recv(128)
+                    #print(type(data))
+                    if not data:
+                        break
+                    json_received = data.decode('utf-8')
+                    json_list = json.loads(json_received)
+                    #print("Received: ", json_list)
+                    imu_data_queue.put(json_list)
+                    conn.sendall(b'1')
+                except socket.error:
+                    conn, addr = sock.accept()
 
 
 #start a separate thread to handle incoming data
