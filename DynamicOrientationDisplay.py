@@ -202,7 +202,7 @@ def draw_drone(pos, rotation, cam):
     glTranslatef(pos[0], pos[1], pos[2])
     glRotatef(cam[0], 1, 0, 0)
     glRotatef(cam[1], 0, 1, 0)
-    glRotatef(rotation[0], 1, 0, 0)
+    glRotatef(-rotation[0], 1, 0, 0)
     glRotatef(rotation[1], 0, 1, 0)
     glRotatef(rotation[2], 0, 0, 1)
     glBegin(GL_LINES)
