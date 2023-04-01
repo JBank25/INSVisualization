@@ -5,6 +5,7 @@ from OpenGL.GLU import *
 import numpy as np
 import time
 import math
+import pandas as pd
 
 import socket
 import json
@@ -185,7 +186,7 @@ edgeArrow = (
 
 # Set up the initial positions and rotations
 starting_rot = [[20,103,-4],[20,103,-4],[20,103,-4],[20,103,-4]]
-offset = [0, 0, 0]
+offset = [ 1.750, 0.276, 0.014]
 len_drone_rots = 10000
 drone_pos = [0, 0, 0]
 drone_rotation = [0, 0, 0]# * len_drone_rots#[20,103,-4]
@@ -194,6 +195,17 @@ ax_pos = [0, 0, 0]
 ax_rotation = [0, 0, 0]
 arrow_pos = [0,0,0]
 arrow_rotation = [0,0,0]
+
+
+
+def read_counter():
+    with open('count.txt', 'r') as file:
+        counter = int(file.read().strip())
+    return counter
+
+def write_counter(counter):
+    with open('count.txt', 'w') as file:
+        file.write(str(counter))
 
 # Define a function to draw a drone given its absolute rotation
 def draw_drone(pos, rotation, cam):
@@ -249,9 +261,12 @@ def draw_arrow(pos, rotation, cam):
 def display_drone_rotation(rotation):
     rotation_text = ['','','']
     #rotation_num = [0.,0.,0.]
-    rotation_text[2] = "x:  {:.3f}°".format((rotation[0]-offset[0])%360.)
-    rotation_text[1] = "y:  {:.3f}°".format((rotation[1]-offset[1]-180)%360.)
-    rotation_text[0] = "z:  {:.3f}°".format((rotation[2]-offset[2])%360.)
+    #rotation_text[2] = "x:  {:.3f}°".format((rotation[0])%360.)
+    #rotation_text[1] = "y:  {:.3f}°".format((rotation[1]-180)%360.)
+    #rotation_text[0] = "z:  {:.3f}°".format((rotation[2])%360.)
+    rotation_text[2] = "PITCH:  {:.3f}°".format((rotation[0])%360.)
+    rotation_text[1] = "ROLL:  {:.3f}°".format((rotation[2])%360.)
+    rotation_text[0] = "YAW:  {:.3f}°".format((rotation[1]-180)%360.)
     for i in range(3):
         drawText(10,(i+1)*30,rotation_text[i])
 
@@ -261,6 +276,23 @@ def drawText(x, y, text):
     glWindowPos2d(x, y)
     glDrawPixels(textSurface.get_width(), textSurface.get_height(), GL_RGBA, GL_UNSIGNED_BYTE, textData)
 
+def writeDataToCSV(oData): #yzx
+    i = read_counter()
+    df = pd.DataFrame(oData, columns=['x','y','z'])
+    df = df.reindex(sorted(df.columns), axis=1)
+    sourceFile = open('flatTest.txt', 'a')
+    print('test',i,':',sep='', file = sourceFile)
+    print('mean:', file = sourceFile)
+    print(df.mean(), file = sourceFile)
+    print('standard deviation:', file = sourceFile)
+    print(df.std(), file = sourceFile)
+    n = str(i)
+    cname = 'orientationDataFlat'+n+'.csv'
+    df.to_csv(n+'orientationDataFlat.csv')
+    print('Data Collection',i,'Concluded.')
+    i += 1
+    write_counter(i)
+    return
     
 
 # Set up the game loop
@@ -275,7 +307,10 @@ xyz = [0]*3
 zeros = [0]*3
 last = [0]*3
 flag = 0
-
+colFlag = 0
+colTime = 0
+oData = []
+test = 4
 ##generate test xyz rotation data
 ##x = ([0] * 500) + [(i/10) for i in list(range(1, 1801))] + ([0] * 1300)
 ##c = 0
@@ -302,6 +337,10 @@ while True:
             quit()
         elif event.type == pygame.MOUSEBUTTONDOWN:
             mouse_down = True
+            if colFlag == 0:
+                print('Beginning Data Collection...')
+                colTime = time.time()
+            colFlag = 1
             mouse_start_pos = pygame.mouse.get_pos()
         elif event.type == pygame.MOUSEBUTTONUP:
             mouse_down = False
@@ -312,6 +351,7 @@ while True:
             camera_rot_x += (mouse_pos[1] - mouse_start_pos[1]) / 5.0
             cam[0] = camera_rot_x
             mouse_start_pos = mouse_pos
+            
     xc = 0#math.sin(math.radians(camera_rot_y)) * math.cos(math.radians(camera_rot_x))
     yc = 0#math.sin(math.radians(camera_rot_x))
     zc = 0#math.cos(math.radians(camera_rot_y)) * math.cos(math.radians(camera_rot_x))
@@ -327,19 +367,39 @@ while True:
     if imu_data_queue.qsize() > 0:
         while imu_data_queue.qsize() > 0:
             xyz = imu_data_queue.get()
+            if flag == 0:
+                offset[2] = xyz[2]+180
             flag = 180
     else:
         xyz = xyz
-    drone_rotation[0] = xyz[1]+offset[0] #rotates like I would backflip
-    drone_rotation[1] = xyz[2]+offset[1] #rotates like I would spin
-    drone_rotation[2] = xyz[0]+offset[2]#rotates like I would cartwheel
+    drone_rotation[0] = xyz[1]-offset[1] #rotates like I would backflip
+    drone_rotation[1] = xyz[2]-offset[2] #rotates like I would spin
+    drone_rotation[2] = xyz[0]-offset[0]#rotates like I would cartwheel
     last = xyz.copy()
     #rot[idx] = 0
     # Draw the objects
     draw_axis(ax_pos, ax_rotation, cam)
     draw_drone(drone_pos, drone_rotation, cam)
+    if colFlag != 0:
+        if drone_rotation[0]%360 > 180.:
+            a = (drone_rotation[0]%360)-360
+        else:
+            a = (drone_rotation[0]%360)
+        if drone_rotation[1]%360-180 > 180.:
+            b = ((drone_rotation[1]%360)-180)-360
+        else:
+            b = (drone_rotation[1]%360)-180
+        if drone_rotation[2]%360 > 180.:
+            c = (drone_rotation[2]%360)-360
+        else:
+            c = (drone_rotation[2]%360)
+        oData.append([a,b,c])
+    if (time.time() - colTime) >= 1200. and colFlag != 0:
+        writeDataToCSV(oData)
+        test += 1
+        colFlag = 0
     if flag == 0:
-        display_drone_rotation([offset[0],offset[1]-180,offset[2]])
+        display_drone_rotation([offset[1],offset[2]-180,offset[0]])
     else:
         display_drone_rotation(drone_rotation)
     # Update the display
