@@ -58,7 +58,8 @@ def getImageCluster(lat_deg, lon_deg, delta_lat,  delta_long, zoom):
     return Cluster, [bbox_ll[1], bbox_ll[0], bbox_ur[1], bbox_ur[0]]
 
 
-def getMapping(lat, lon):
+def getMapping(lon, lat):
+
     lat_deg, lon_deg, delta_lat,  delta_long, zoom = lat-0.0025/2, lon-0.0025/2, 0.0025,  0.0025, 17
     a, bbox = getImageCluster(lat_deg, lon_deg, delta_lat, delta_long, zoom)
     # list of points to display (long, lat)
@@ -88,21 +89,23 @@ def receive_data():
                         break
                     json_received = data.decode('utf-8')
                     json_list = json.loads(json_received)
+                    print(f'Recieved {json_list}')
                     imu_data_queue.put(json_list)
                     conn.sendall(b'1')
                 except socket.error:
                     conn, addr = sock.accept()
 
+
 def update_pos(data):
     pos[0] = data[0]
     pos[1] = data[1]
-    latitude = font.render("Latitude: x:%.8f" % (pos[0]), True, (0, 0, 0))
-    longitude = font.render("Longitude: x:%.8f" % (pos[1]), True, (0, 0, 0))
+    latitude = font.render("Longitude: x:%.8f" % (pos[0]), True, (0, 0, 0))
+    longitude = font.render("Latitude: x:%.8f" % (pos[1]), True, (0, 0, 0))
     return latitude, longitude
 
-def getCoord(llon, ulon, llat, ulat, lat, lon, w, h):
-    x = (lat - llat) / (ulat - llat)
-    y = (lon - llon) / (ulon - llon)
+def getCoord(llon, ulon, llat, ulat, lon, lat, w, h):
+    x = (lon - llon) / (ulon - llon)
+    y = (lat - llat) / (ulat - llat)
     return x*w, (1-y)*h
 
 
@@ -110,20 +113,21 @@ def getCoord(llon, ulon, llat, ulat, lat, lon, w, h):
 recv_thread = threading.Thread(target=receive_data)
 recv_thread.start()
 
-pos = [30.288958, -97.735399]
+#lon, lat
+pos = [-97.73668670654297, 30.2884578704834]
 
 a, llon, ulon, llat, ulat = getMapping(pos[0], pos[1])
 
 a.save('background.png')
 pygame.init()
 size = width, height = a.width, a.height
+c1, c2 = getCoord(llon, ulon, llat, ulat, pos[0], pos[1], width, height)
 
 grey = 200, 200, 200
 w, h = 5, 5
-r = Rect(pos[0], pos[1], w, h)
+r = Rect(c1, c2, w, h)
 
 screen = pygame.display.set_mode(size)
-screen_rect = screen.get_rect()
 font = pygame.font.SysFont(None, 24)
 bg = pygame.image.load('background.png').convert()
 
@@ -132,25 +136,21 @@ count = 0
 
 clock = pygame.time.Clock()
 
-#INSIDE OF THE GAME LOOP
 while True:
     clock.tick(t)
-
-    screen.fill((255,255,255))
-
-    lat, lon = update_pos(pos)
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT: sys.exit()
 
     if imu_data_queue.qsize() > 0:
         while imu_data_queue.qsize() > 0:
-            pos = imu_data_queue.get()
+            data = imu_data_queue.get()
+            lat, lon = update_pos(data)
             flag = 180
     else:
-        pos = pos
+        lat, lon = update_pos(pos)
 
-    if count == 5:
+    if count == 7:
         count = 0
         t_a, t_llon, t_ulon, t_llat, t_ulat = getMapping(pos[0], pos[1])
         if (t_a.width and t_a.height) == 511:
@@ -160,12 +160,11 @@ while True:
     else:
         count += 1
 
-
     x, y = getCoord(llon, ulon, llat, ulat, pos[0], pos[1], a.width, a.height)
-
-    screen.blit(bg,(0,0))
-    r.clamp_ip(screen_rect)
+    screen.fill((255, 255, 255))
+    screen.blit(bg, (0, 0))
     pygame.draw.rect(screen, (0, 0, 255), r)
+
     screen.blit(lat, (20, 20))
     screen.blit(lon, (20, 50))
     r.update(x, y, w, h)
