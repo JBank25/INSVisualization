@@ -13,9 +13,14 @@ num_notifications = 0  # number of notifications received, debug purposes
 imu_data_queue = asyncio.Queue(-1)  # queue for storing imu data
 
 # create a TCP/IP socket
-sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server_address = ('localhost', 10002)
-sock.connect(server_address)
+sock_gps = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock_orientation = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+address_gps = ('localhost', 10002)
+address_orientation = ('localhost', 10003)
+
+sock_gps.connect(address_gps)
+sock_orientation.connect(address_orientation)
 
 
 async def process_imu_data():
@@ -29,10 +34,10 @@ async def process_imu_data():
         imu_data = json.dumps(imu_data[-3:])
 
         print(f"Sending IMU data: {imu_data}")
-        sock.sendall(imu_data.encode())
+        sock_orientation.sendall(imu_data.encode())
         # loop until we receive a '1' back from the socket
         while True:
-            response = sock.recv(1024)
+            response = sock_orientation.recv(1024)
             if response == b'1':
                 print("Received '1' from socket")
                 break
@@ -62,7 +67,7 @@ async def imu_handler(sender, data):
     # writing data to file
     with open("imu_data.txt", "a") as f:
         f.write(f"imu: {', '.join(str(x) for x in imu_data)}\n")
-    # await imu_data_queue.put(imu_data)                  #putting data into queue
+    await imu_data_queue.put(imu_data)                  #putting data into queue
 
 
 async def gps_handler(sender, data):
@@ -72,10 +77,10 @@ async def gps_handler(sender, data):
     print(f"*************Received GPS data: {gps_packet}**********************")
     # only send the last 3 entries in the list
     gps_data = json.dumps(gps_packet[-2:])
-    sock.sendall(gps_data.encode())
+    sock_gps.sendall(gps_data.encode())
     # loop until we receive a '1' back from the socket
     while True:
-        response = sock.recv(1024)
+        response = sock_gps.recv(1024)
         if response == b'1':
             print("Received '1' from socket")
             break
@@ -98,7 +103,7 @@ async def main():
                 print("Connected to device: ")
                 await client.start_notify(BLE_UUID_IMU_VALUE, imu_handler)  # start listening for notifications from IMU
                 await client.start_notify(BLE_UUID_GPS_VALUE, gps_handler)  # start listening for notifications from GPS
-                # processing_task = asyncio.create_task(process_imu_data())   # start the coroutine to process the IMU data
+                processing_task = asyncio.create_task(process_imu_data())   # start the coroutine to process the IMU data
                 loop = asyncio.get_event_loop()
                 try:
                     print("Press 'q' to exit")
